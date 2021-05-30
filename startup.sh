@@ -3,18 +3,29 @@
 # Start argument handling
 
 function show_help() {
+	echo "Script to easily manage your CPU using cpufreq as a CPU power backend"
 	echo "${0} -m \"AC\" -> AC Plugged, boost CPU accordingly"
 	echo "${0} -m \"BAT\" -> Using battery, boost CPU accordingly"
-	echo "${0} -j 2 -> Set two cores enabled when using battery"
-	echo "${0} -c 1000 -> Set max clock to 1000 Mhz when using battery"
+	echo "${0} -m \"AUTO\" -> Will automatically detect if using battery"
+	echo "${0} -j 2 -> Default behaviour: Set two cores enabled when using battery\n\t\tIf mode is AC, -j will specify the maximum number of cores to keep enabled at full power"
+	echo "${0} -c 1000 -> Set max clock to 1000 Mhz when using battery\n\t\tIf mode is AC, -c will specify the maximum clock at full power"
+	echo "Examples:"
+	echo "1. The examples below are suitable when the AC adapter is connected"
+	echo "${0} -m AC # Set CPU fully powered"
+	echo "${0} -m AC -c 3200 # Set CPU fully powered, but ALWAYS under 3.2Ghz"
+	echo "${0} -m AC -j 4 # Set CPU fully powered, but will never use more than 4 cores"
+	echo "2. The examples below are suitable if you want to save battery"
+	echo "${0} -m BAT # Set the cpu to dual core at 1Ghz with pstate enabled (default) and powersave/ ondemand governor"
+	echo "${0} -m BAT -c 1800 -j 4 # Set the CPU to, at best, quad core at 1.8Ghz with pstate turbo disabled (intel power save) and powersave/ ondemand governor"
+	echo "${0} -m BAT -c 1800 -j 4 -t # Set the CPU to, at best, quad core at 1.8Ghz with pstate turbo enabled (not using intel power save) and powersave/ ondemand governor"
+	echo "3. The examples below are suitable when you are running this script periodically in an interval of time (chron or daemon) and want to automatically detect if AC is plugged (requires ACPI)"
+	echo "${0} -m AUTO # If you unplug your AC and run this program, it will put CPU on powersave, at 1Ghz with 2 cores enabled"
 }
 
 function invalid_argument() {
 	echo "Error, invalid argument ${1}" &> /dev/stderr
 	exit 1;
-
 }
-
 # POSIX variable, reset for getopt usage
 OPTIND=1
 
@@ -24,8 +35,10 @@ AC_DISABLE_CORES=false
 AC_SET_FREQ=false
 num_cores=2
 freq=1000
+disable_turbo=1
+governor=false
 
-while getopts "h?m:j:c:" opt; do
+while getopts "h?m:j:c:d:t:" opt; do
 	case "$opt" in
 		h|\?)
 			show_help
@@ -50,9 +63,15 @@ while getopts "h?m:j:c:" opt; do
 				AC_SET_FREQ=true
 			fi
 			;;
+		t)
+			disable_turbo=0
+			;;
+		g)
+			governor=${OPTARG}
+			;;
 		*)
 			# Ideally will not run as getopt handles it
-			invalid_argument "${opt}"
+			invalid_argument "${0} ${opt}"
 			;;
 	esac
 done
@@ -60,12 +79,13 @@ done
 # Start Power save logic
 
 modprobe cpufreq_powersave
+modprobe cpufreq_ondemand
 modprobe cpufreq_userspace
 
 ################################################
 #  Controls Intel Turbo Boost                  #
 
-disable_turbo=1
+# disable_turbo=1
 if [ ${AC_PLUGGED} == true ]; then
 	disable_turbo=0
 fi
@@ -73,7 +93,7 @@ echo ${disable_turbo} > /sys/devices/system/cpu/intel_pstate/no_turbo
 
 ################################################
 #  Set powersave to all CPUs                   #
-#  Set max clock to 1 Ghz for all cpus         #
+#  Set max clock to n Ghz for all cpus         #
 
 nprocessors_conf=`getconf _NPROCESSORS_CONF`
 nprocessors_online=`getconf _NPROCESSORS_ONLN`
@@ -113,9 +133,15 @@ do
 		else
 			ac_max="${max_cpu_freq}Khz"
 		fi
-		cpufreq-set -r --cpu ${cpu} --governor performance -d ${min_cpu_freq}Khz -u ${ac_max}
+		if [ $governor == false ]; then
+			governor='performance'
+		fi
+		cpufreq-set -r --cpu ${cpu} --governor ${governor} -d ${min_cpu_freq}Khz -u ${ac_max}
 	else
-		cpufreq-set -r --cpu ${cpu} --governor powersave -d ${min_cpu_freq} -u ${freq}
+		if [ $governor == false ]; then
+			governor='powersave'
+		fi
+		cpufreq-set -r --cpu ${cpu} --governor $governor -d ${min_cpu_freq} -u ${freq}
 	fi
 	# echo 1000000 > /sys/devices/system/cpu/cpu${i}/cpufreq/scaling_max_freq
 	# echo 1000000 > /sys/devices/system/cpu/cpu${i}/cpufreq/cpuinfo_max_freq
