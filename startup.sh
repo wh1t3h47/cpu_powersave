@@ -3,23 +3,23 @@
 # Start argument handling
 
 function show_help() {
-	echo "Script to easily manage your CPU using cpufreq as a CPU power backend"
-	echo "${0} -m \"AC\" -> AC Plugged, boost CPU accordingly"
-	echo "${0} -m \"BAT\" -> Using battery, boost CPU accordingly"
-	echo "${0} -m \"AUTO\" -> Will automatically detect if using battery"
-	echo "${0} -j 2 -> Default behaviour: Set two cores enabled when using battery\n\t\tIf mode is AC, -j will specify the maximum number of cores to keep enabled at full power"
-	echo "${0} -c 1000 -> Set max clock to 1000 Mhz when using battery\n\t\tIf mode is AC, -c will specify the maximum clock at full power"
-	echo "Examples:"
-	echo "1. The examples below are suitable when the AC adapter is connected"
-	echo "${0} -m AC # Set CPU fully powered"
-	echo "${0} -m AC -c 3200 # Set CPU fully powered, but ALWAYS under 3.2Ghz"
-	echo "${0} -m AC -j 4 # Set CPU fully powered, but will never use more than 4 cores"
-	echo "2. The examples below are suitable if you want to save battery"
-	echo "${0} -m BAT # Set the cpu to dual core at 1Ghz with pstate enabled (default) and powersave/ ondemand governor"
-	echo "${0} -m BAT -c 1800 -j 4 # Set the CPU to, at best, quad core at 1.8Ghz with pstate turbo disabled (intel power save) and powersave/ ondemand governor"
-	echo "${0} -m BAT -c 1800 -j 4 -t # Set the CPU to, at best, quad core at 1.8Ghz with pstate turbo enabled (not using intel power save) and powersave/ ondemand governor"
-	echo "3. The examples below are suitable when you are running this script periodically in an interval of time (chron or daemon) and want to automatically detect if AC is plugged (requires ACPI)"
-	echo "${0} -m AUTO # If you unplug your AC and run this program, it will put CPU on powersave, at 1Ghz with 2 cores enabled"
+	echo -e "Script to easily manage your CPU using cpufreq as a CPU power backend\n"
+	echo -e "${0} -m \"AC\" -> AC Plugged, boost CPU accordingly"
+	echo -e "${0} -m \"BAT\" -> Using battery, boost CPU accordingly"
+	echo -e "${0} -m \"AUTO\" -> Will automatically detect if using battery or AC power"
+	echo -e "${0} -j 2 -> Default behaviour: Set two cores enabled when using battery\n\t\tIf mode is AC, -j will specify the maximum number of cores to keep enabled at full power"
+	echo -e "${0} -c 1000 -> Set max clock to 1000 Mhz when using battery\n\t\tIf mode is AC, -c will specify the maximum clock at full power\n"
+	echo -e "Examples:\n"
+	echo -e "1. The examples below are suitable when the AC adapter is connected\n"
+	echo -e "${0} -m AC # Set CPU fully powered"
+	echo -e "${0} -m AC -c 3200 # Set CPU fully powered, but ALWAYS under 3.2Ghz"
+	echo -e "${0} -m AC -j 4 # Set CPU fully powered, but will never use more than 4 cores\n"
+	echo -e "2. The examples below are suitable if you want to save battery\n"
+	echo -e "${0} -m BAT # Set the cpu to dual core at 1Ghz with pstate enabled (default) and powersave/ ondemand governor"
+	echo -e "${0} -m BAT -c 1800 -j 4 # Set the CPU to, at best, quad core at 1.8Ghz with pstate turbo disabled (intel power save) and powersave/ ondemand governor"
+	echo -e "${0} -m BAT -c 1800 -j 4 -t # Set the CPU to, at best, quad core at 1.8Ghz with pstate turbo enabled (not using intel power save) and powersave/ ondemand governor\n"
+	echo -e "3. The examples below are suitable when you are running this script periodically in an interval of time (chron or daemon) and want to automatically detect if AC is plugged (requires ACPI) \n"
+	echo -e -n "${0} -m AUTO # If you unplug your AC and run this program, it will put CPU on powersave, at 1Ghz with 2 cores enabled"
 }
 
 function invalid_argument() {
@@ -47,8 +47,16 @@ while getopts "h?m:j:c:d:t:" opt; do
 		m)
 			if [ ${OPTARG} == "AC" ]; then
 				AC_PLUGGED=true
+			elif [ ${OPTARG} == "AUTO" ]; then
+				supply_online=`cat /sys/class/power_supply/AC0/online`
+				echo $supply_online
+				if [ $supply_online == '0' ]; then
+					AC_PLUGGED=false
+				elif [ $supply_online == '1' ]; then
+					AC_PLUGGED=true;
+				fi
 			elif [ ${OPTARG} != "BAT" ]; then
-				invalid_argument "\"${0} ${opt} ${OPTARG}\""
+				invalid_argument "\"${0} -${opt} ${OPTARG}\""
 			fi
 			;;
 		j)
@@ -71,7 +79,7 @@ while getopts "h?m:j:c:d:t:" opt; do
 			;;
 		*)
 			# Ideally will not run as getopt handles it
-			invalid_argument "${0} ${opt}"
+			invalid_argument "${0} -${opt}"
 			;;
 	esac
 done
