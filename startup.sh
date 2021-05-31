@@ -38,8 +38,9 @@ freq=1000
 min_freq=false
 disable_turbo=1
 governor=false
+debug=false
 
-while getopts "h?m:j:c:d:t" opt; do
+while getopts "h?m:j:c:d:tv" opt; do
 	case "$opt" in
 		h|\?)
 			show_help
@@ -78,6 +79,9 @@ while getopts "h?m:j:c:d:t" opt; do
 		g)
 			governor=${OPTARG}
 			;;
+		v)
+		    debug=true
+			;;
 		*)
 			# Ideally will not run as getopt handles it
 			invalid_argument "${0} -${opt}"
@@ -112,7 +116,7 @@ cpu_end=$((${nprocessors_conf} - 1))
 # min_cpu_freq=`cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq`
 max_cpu_freq=`lscpu | grep -Po 'CPU max MHz:\s*\K[0-9]+' | sed "s/\.//g"`
 min_cpu_freq=`lscpu | grep -Po 'CPU min MHz:\s*\K[0-9]+' | sed "s/\.//g"`
-echo "min cpu $min_cpu_freq"
+# echo "min cpu $min_cpu_freq"
 specified_freq=${freq}
 
 function invalid_frequency() {
@@ -184,15 +188,15 @@ do
 			governor='performance'
 		fi
 
-		# echo "cpufreq-set -r --cpu ${cpu} --governor ${governor} -d ${min_freq}MHz -u ${ac_max}MHz"
+	    if [ $debug == true ]; then echo "cpufreq-set -r --cpu ${cpu} --governor ${governor} -d ${min_freq}MHz -u ${ac_max}MHz"; fi
 		cpufreq-set -r --cpu ${cpu} --governor ${governor} -d ${min_freq}MHz -u ${ac_max}MHz
 	else
 		if [ $governor == false ]; then
 			governor='powersave'
 		fi
 
-		# echo "cpufreq-set -r --cpu ${cpu} --governor $governor -d ${min_freq}MHz -u ${freq}"
-		cpufreq-set -r --cpu ${cpu} --governor $governor -d ${min_freq}MHz -u ${freq}MHz
+		if [ $debug == true ]; then echo "cpufreq-set -r --cpu ${cpu} --governor $governor -d ${min_freq}MHz -u ${freq}"; fi
+		cpufreq-set -r --cpu ${cpu} --governor $governor -d ${min_freq}MHz -u ${freq}
 	fi
 	# echo 1000000 > /sys/devices/system/cpu/cpu${i}/cpufreq/scaling_max_freq
 	# echo 1000000 > /sys/devices/system/cpu/cpu${i}/cpufreq/cpuinfo_max_freq
