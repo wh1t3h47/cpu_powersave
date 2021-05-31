@@ -29,16 +29,17 @@ function invalid_argument() {
 # POSIX variable, reset for getopt usage
 OPTIND=1
 
-# Initialize our own variables:
+# Argument Variables
 AC_PLUGGED=false
 AC_DISABLE_CORES=false
 AC_SET_FREQ=false
 num_cores=2
 freq=1000
+min_freq=false
 disable_turbo=1
 governor=false
 
-while getopts "h?m:j:c:d:t:" opt; do
+while getopts "h?m:j:c:d:t" opt; do
 	case "$opt" in
 		h|\?)
 			show_help
@@ -49,7 +50,7 @@ while getopts "h?m:j:c:d:t:" opt; do
 				AC_PLUGGED=true
 			elif [ ${OPTARG} == "AUTO" ]; then
 				supply_online=`cat /sys/class/power_supply/AC0/online`
-				echo $supply_online
+				# echo $supply_online
 				if [ $supply_online == '0' ]; then
 					AC_PLUGGED=false
 				elif [ $supply_online == '1' ]; then
@@ -93,6 +94,7 @@ modprobe cpufreq_userspace
 ################################################
 #  Controls Intel Turbo Boost                  #
 
+# The above variable is an argument
 # disable_turbo=1
 if [ ${AC_PLUGGED} == true ]; then
 	disable_turbo=0
@@ -108,16 +110,28 @@ nprocessors_online=`getconf _NPROCESSORS_ONLN`
 cpu_end=$((${nprocessors_conf} - 1))
 max_cpu_freq=`cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq`
 min_cpu_freq=`cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq`
+specified_freq=${freq}
+
+function invalid_frequency() {
+	echo "Cannot set frequency: CPU cannot handle ${1}Mhz, setting to ${2}Khz"
+}
 
 # Test if CPU can run at specified frequency
-if [ $((${freq} * 1000)) -gt ${max_cpu_freq} ]; then
-	echo "Cannot set frequency: CPU cannot handle ${freq}Mhz, setting to ${max_cpu_freq}Khz"
-	freq="${max_cpu_freq}Khz"
-else
-	freq="${freq}Mhz"
+
+if [ ${disable_turbo} -eq 0 ]; then
+	if [ $((${freq} * 1000)) -gt ${max_cpu_freq} ] ||
+		[ $((${freq} * 1000)) -lt ${min_cpu_freq} ]
+		then
+			invalid_frequency ${freq} ${max_cpu_freq}
+			freq=${max_cpu_freq}
+		else
+			freq="${freq}Mhz"
+	fi
 fi
 
+
 # Test if number of cores specified is acceptable
+
 if [ ${num_cores} -gt ${nprocessors_conf} ] ||
 	[ ${num_cores} -lt 1 ]
 then
@@ -129,10 +143,39 @@ fi
 for cpu in `seq 0 ${cpu_end}`
 do
 	# Check if all CPUs are enabled
-	if [ nprocessors_conf != nprocessors_online ]; then
+	if [ ${nprocessors_conf} != ${nprocessors_online} ]; then
 		# Needs CPU enabled to set governor
 		bash -c "echo 1 > /sys/devices/system/cpu/cpu${cpu}/online" &>/dev/null
+		nprocessors_online=`getconf _NPROCESSORS_ONLN`
 	fi
+
+	if [ ${disable_turbo} == 1 ]; then
+
+		# Test if CPU can run at specified frequency
+
+		echo "$((${specified_freq} * 1000)) -gt ${max_cpu_freq} || $((${specified_freq} * 1000)) -lt ${min_cpu_freq} "
+		if [ $((${specified_freq} * 1000)) -gt ${max_cpu_freq} ] ||
+			[ $((${specified_freq} * 1000)) -lt ${min_cpu_freq} ]
+				then
+					echo freq
+					invalid_frequency ${specified_freq} ${max_cpu_freq}
+					freq=${max_cpu_freq}
+		fi
+
+		if [ ${min_freq} != false ]; then
+			if [ $((${min_freq} * 1000)) -lt ${min_cpu_freq} ] ||
+				[ $((${min_freq} * 1000)) -gt ${max_cpu_freq} ]
+						then
+							invalid_frequency ${min_freq} ${min_cpu_freq}
+							min_freq=${min_cpu_freq}
+			else
+			    min_freq=$((min_freq * 1000))
+			fi
+		else
+		    min_freq=${min_cpu_freq}
+		fi
+	fi
+
 
 	if [ $AC_PLUGGED == true ]; then
 		ac_max=""
@@ -144,12 +187,18 @@ do
 		if [ $governor == false ]; then
 			governor='performance'
 		fi
-		cpufreq-set -r --cpu ${cpu} --governor ${governor} -d ${min_cpu_freq}Khz -u ${ac_max}
+		if [ disable_turbo == 1 ] && [ ${ac_max} -gt ${pstate_max} ]
+		then
+			ac_max=${pstate_max}
+		fi
+		echo "cpufreq-set -r --cpu ${cpu} --governor ${governor} -d ${min_freq}Khz -u ${ac_max}"
+		cpufreq-set -r --cpu ${cpu} --governor ${governor} -d ${min_freq}hz -u ${ac_max}
 	else
 		if [ $governor == false ]; then
 			governor='powersave'
 		fi
-		cpufreq-set -r --cpu ${cpu} --governor $governor -d ${min_cpu_freq} -u ${freq}
+		echo "cpufreq-set -r --cpu ${cpu} --governor $governor -d ${min_freq}Khz -u ${freq}"
+		cpufreq-set -r --cpu ${cpu} --governor $governor -d ${min_freq}hz -u ${freq}
 	fi
 	# echo 1000000 > /sys/devices/system/cpu/cpu${i}/cpufreq/scaling_max_freq
 	# echo 1000000 > /sys/devices/system/cpu/cpu${i}/cpufreq/cpuinfo_max_freq
@@ -157,6 +206,7 @@ done
 
 ################################################
 #  Disable 6 CPUs on battery                   #
+
 if [ ${AC_PLUGGED} == false ] ||
 	[ ${AC_DISABLE_CORES} == true ]
 then
