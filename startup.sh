@@ -8,7 +8,7 @@ function show_help() {
 	echo -e "${0} -m \"BAT\" -> Using battery, boost CPU accordingly"
 	echo -e "${0} -m \"AUTO\" -> Will automatically detect if using battery or AC power"
 	echo -e "${0} -j 2 -> Default behaviour: Set two cores enabled when using battery\n\t\tIf mode is AC, -j will specify the maximum number of cores to keep enabled at full power"
-	echo -e "${0} -c 1000 -> Set max clock to 1000 Mhz when using battery\n\t\tIf mode is AC, -c will specify the maximum clock at full power\n"
+	echo -e "${0} -c 1000 -> Set max clock to 1000 MHz when using battery\n\t\tIf mode is AC, -c will specify the maximum clock at full power\n"
 	echo -e "Examples:\n"
 	echo -e "1. The examples below are suitable when the AC adapter is connected\n"
 	echo -e "${0} -m AC # Set CPU fully powered"
@@ -108,25 +108,26 @@ echo ${disable_turbo} > /sys/devices/system/cpu/intel_pstate/no_turbo
 nprocessors_conf=`getconf _NPROCESSORS_CONF`
 nprocessors_online=`getconf _NPROCESSORS_ONLN`
 cpu_end=$((${nprocessors_conf} - 1))
-max_cpu_freq=`cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq`
-min_cpu_freq=`cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq`
+# max_cpu_freq=`cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq`
+# min_cpu_freq=`cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq`
+max_cpu_freq=`lscpu | grep -Po 'CPU max MHz:\s*\K[0-9]+' | sed "s/\.//g"`
+min_cpu_freq=`lscpu | grep -Po 'CPU min MHz:\s*\K[0-9]+' | sed "s/\.//g"`
+echo "min cpu $min_cpu_freq"
 specified_freq=${freq}
 
 function invalid_frequency() {
-	echo "Cannot set frequency: CPU cannot handle ${1}Mhz, setting to ${2}Khz"
+	echo "Cannot set frequency: CPU cannot handle ${1}MHz, setting to ${2}Khz"
 }
 
 # Test if CPU can run at specified frequency
 
-if [ ${disable_turbo} -eq 0 ]; then
-	if [ $((${freq} * 1000)) -gt ${max_cpu_freq} ] ||
-		[ $((${freq} * 1000)) -lt ${min_cpu_freq} ]
-		then
-			invalid_frequency ${freq} ${max_cpu_freq}
-			freq=${max_cpu_freq}
-		else
-			freq="${freq}Mhz"
-	fi
+if [ $((${freq} * 1)) -gt ${max_cpu_freq} ] ||
+	[ $((${freq} * 1)) -lt ${min_cpu_freq} ]
+	then
+		invalid_frequency ${freq} ${max_cpu_freq}
+		freq=${max_cpu_freq}
+	else
+		freq="${freq}MHz"
 fi
 
 
@@ -139,6 +140,29 @@ then
 	exit 1;
 fi
 
+# Test if specified_freq and min_freq are acceptable
+
+		if [ $((${specified_freq} * 1)) -gt ${max_cpu_freq} ] ||
+			[ $((${specified_freq} * 1)) -lt ${min_cpu_freq} ]
+				then
+					# echo 'freq test'
+					invalid_frequency ${specified_freq} ${max_cpu_freq}
+					freq=${max_cpu_freq}
+		fi
+
+		if [ ${min_freq} != false ]; then
+		    # echo 'min freq test'
+			if [ $((${min_freq} * 1)) -lt ${min_cpu_freq} ] ||
+				[ $((${min_freq} * 1)) -gt ${max_cpu_freq} ]
+						then
+							invalid_frequency ${min_freq} ${min_cpu_freq}
+							min_freq=${min_cpu_freq}
+			else
+			    min_freq=$((min_freq * 1))
+			fi
+		else
+		    min_freq=${min_cpu_freq}
+		fi
 
 for cpu in `seq 0 ${cpu_end}`
 do
@@ -149,56 +173,26 @@ do
 		nprocessors_online=`getconf _NPROCESSORS_ONLN`
 	fi
 
-	if [ ${disable_turbo} == 1 ]; then
-
-		# Test if CPU can run at specified frequency
-
-		echo "$((${specified_freq} * 1000)) -gt ${max_cpu_freq} || $((${specified_freq} * 1000)) -lt ${min_cpu_freq} "
-		if [ $((${specified_freq} * 1000)) -gt ${max_cpu_freq} ] ||
-			[ $((${specified_freq} * 1000)) -lt ${min_cpu_freq} ]
-				then
-					echo freq
-					invalid_frequency ${specified_freq} ${max_cpu_freq}
-					freq=${max_cpu_freq}
-		fi
-
-		if [ ${min_freq} != false ]; then
-			if [ $((${min_freq} * 1000)) -lt ${min_cpu_freq} ] ||
-				[ $((${min_freq} * 1000)) -gt ${max_cpu_freq} ]
-						then
-							invalid_frequency ${min_freq} ${min_cpu_freq}
-							min_freq=${min_cpu_freq}
-			else
-			    min_freq=$((min_freq * 1000))
-			fi
-		else
-		    min_freq=${min_cpu_freq}
-		fi
-	fi
-
-
 	if [ $AC_PLUGGED == true ]; then
 		ac_max=""
 		if [ ${AC_SET_FREQ} == true ]; then
 			ac_max="${freq}"
 		else
-			ac_max="${max_cpu_freq}Khz"
+			ac_max="${max_cpu_freq}"
 		fi
 		if [ $governor == false ]; then
 			governor='performance'
 		fi
-		if [ disable_turbo == 1 ] && [ ${ac_max} -gt ${pstate_max} ]
-		then
-			ac_max=${pstate_max}
-		fi
-		echo "cpufreq-set -r --cpu ${cpu} --governor ${governor} -d ${min_freq}Khz -u ${ac_max}"
-		cpufreq-set -r --cpu ${cpu} --governor ${governor} -d ${min_freq}hz -u ${ac_max}
+
+		# echo "cpufreq-set -r --cpu ${cpu} --governor ${governor} -d ${min_freq}MHz -u ${ac_max}MHz"
+		cpufreq-set -r --cpu ${cpu} --governor ${governor} -d ${min_freq}MHz -u ${ac_max}MHz
 	else
 		if [ $governor == false ]; then
 			governor='powersave'
 		fi
-		echo "cpufreq-set -r --cpu ${cpu} --governor $governor -d ${min_freq}Khz -u ${freq}"
-		cpufreq-set -r --cpu ${cpu} --governor $governor -d ${min_freq}hz -u ${freq}
+
+		# echo "cpufreq-set -r --cpu ${cpu} --governor $governor -d ${min_freq}MHz -u ${freq}"
+		cpufreq-set -r --cpu ${cpu} --governor $governor -d ${min_freq}MHz -u ${freq}MHz
 	fi
 	# echo 1000000 > /sys/devices/system/cpu/cpu${i}/cpufreq/scaling_max_freq
 	# echo 1000000 > /sys/devices/system/cpu/cpu${i}/cpufreq/cpuinfo_max_freq
