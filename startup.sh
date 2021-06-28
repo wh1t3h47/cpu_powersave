@@ -39,6 +39,8 @@ min_freq=false
 disable_turbo=1
 governor=false
 debug=false
+# TODO: Parametrize
+disable_bluetooth=true
 
 while getopts "h?m:j:c:d:tv" opt; do
 	case "$opt" in
@@ -216,5 +218,13 @@ then
 		if [ $i == 0 ]; then continue; fi
 		echo ${disable_cpu} > /sys/devices/system/cpu/cpu${i}/online
 	done
+fi
+
+################################################
+#  Disable bluetooth                           #
+
+if [ ${disable_bluetooth} == true ]
+then
+	systemctl stop bluetooth
 fi
 
