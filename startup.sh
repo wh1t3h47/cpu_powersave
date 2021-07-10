@@ -40,7 +40,7 @@ disable_turbo=1
 governor=false
 debug=false
 
-while getopts "h?m:j:c:d:tv" opt; do
+while getopts "h?m:j:c:d:g:tv" opt; do
 	case "$opt" in
 		h|\?)
 			show_help
