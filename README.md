@@ -1,5 +1,6 @@
 # CPU Powersave
 > A small bash utility to scale down or up CPU power consumption
+>
 > Pequena utilidade escrita em bash para aumentar ou diminuir o consumo de energia da CPU
 
 ## Features
