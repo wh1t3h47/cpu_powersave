@@ -24,8 +24,14 @@ AC_DISABLE_CORES=false
 AC_SET_FREQ=false
 num_cores=2
 freq=1000
+min_freq=false
+disable_turbo=1
+governor=false
+debug=false
+# TODO: Parametrize
+disable_bluetooth=true
 
-while getopts "h?m:j:c:" opt; do
+while getopts "h?m:j:c:d:g:tv" opt; do
 	case "$opt" in
 		h|\?)
 			show_help
@@ -153,5 +159,13 @@ then
 		if [ $i == 0 ]; then continue; fi
 		echo ${enable_cpu} > /sys/devices/system/cpu/cpu${i}/online
 	done
+fi
+
+################################################
+#  Disable bluetooth                           #
+
+if [ ${disable_bluetooth} == true ]
+then
+	systemctl stop bluetooth
 fi
 
