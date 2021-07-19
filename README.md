@@ -1,7 +1,19 @@
 # CPU Powersave
+<div align="center">
+  <img alt="Shell Script" src="https://img.shields.io/badge/shell_script-%23121011.svg?style=for-the-badge&logo=gnu-bash&logoColor=white"/>
+  <img alt="Linux" src="https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black">
+  <img alt="Kali Linux" src="https://img.shields.io/badge/Kali_Linux-557C94?style=for-the-badge&logo=kali-linux&logoColor=white" />
+</div>
+
 > A small bash utility to scale down or up CPU power consumption
 >
 > Pequena utilidade escrita em bash para aumentar ou diminuir o consumo de energia da CPU
+>
+> <p textalign="right" align="right"> By wh1t3h47 </p>
+>
+> <p textalign="right" align="right"> (Antônio Martos Harres) </p>
+> 
+> <p textalign="right" align="right"> - https://github.com/wh1t3h47 </p>
 
 ## Features
 1. Automatically detects if charger is plugged and acts accordingly to the context;
